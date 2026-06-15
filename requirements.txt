@@ -1,0 +1,7 @@
+torch>=2.0
+numpy>=1.24
+pyyaml>=6.0
+tqdm>=4.65
+datasets>=2.14
+tokenizers>=0.13
+wandb>=0.15
