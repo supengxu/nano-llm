@@ -1,31 +1,29 @@
-[build-system]
-requires = ["setuptools>=68.0", "wheel"]
-build-backend = "setuptools.backends._legacy:_Backend"
-
 [project]
 name = "nano-llm"
 version = "0.1.0"
 description = "A tiny LLM implementation from scratch"
-readme = "README.md"
-license = {text = "Apache-2.0"}
 requires-python = ">=3.10"
 dependencies = [
-    "torch>=2.0",
-    "numpy>=1.24",
-    "pyyaml>=6.0",
-    "tqdm>=4.65",
-    "datasets>=2.14",
-    "tokenizers>=0.13",
-    "wandb>=0.15",
+    "datasets",
+    "numpy",
+    "pyyaml",
+    "tokenizers",
+    "torch",
+    "tqdm",
+    "wandb",
 ]
 
-[project.optional-dependencies]
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/nano_llm"]
+
+[dependency-groups]
 dev = [
-    "pytest>=7.4",
-    "pytest-cov>=4.1",
-    "black>=23.0",
-    "ruff>=0.1",
+    "black>=26.5.1",
+    "pytest>=9.1.0",
+    "pytest-cov>=7.1.0",
+    "ruff>=0.15.17",
 ]
-
-[tool.setuptools.packages.find]
-where = ["src"]
