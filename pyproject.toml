@@ -5,12 +5,9 @@ description = "A tiny LLM implementation from scratch"
 requires-python = ">=3.10"
 dependencies = [
     "datasets",
-    "numpy",
     "pyyaml",
-    "tokenizers",
     "torch",
     "tqdm",
-    "wandb",
 ]
 
 [build-system]
