@@ -31,7 +31,12 @@ DEFAULT_CONFIG = {
 def load_model(checkpoint_path=None, device=None):
     """初始化模型，可选加载预训练权重。"""
     if device is None:
-        device = "cuda" if torch.cuda.is_available() else "cpu"
+        if torch.cuda.is_available():
+            device = "cuda"
+        elif torch.backends.mps.is_available():
+            device = "mps"
+        else:
+            device = "cpu"
 
     cfg = DEFAULT_CONFIG.copy()
     model = GPTModel(cfg)
@@ -54,7 +59,7 @@ def main():
     parser.add_argument("--checkpoint", type=str, default=None,
                         help="Path to model checkpoint (.pth)")
     parser.add_argument("--device", type=str, default=None,
-                        help="Device to run on (cpu/cuda, default: auto)")
+                        help="Device to run on (cpu/cuda/mps, default: auto)")
     args = parser.parse_args()
 
     # ---- 1. 加载模型 ----
