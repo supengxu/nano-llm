@@ -151,6 +151,58 @@ def test_gpt_model():
     print(f"   输出形状: {logits.shape}")
 
 
+def test_generate_text_simple():
+    """
+    测试 generate_text_simple 函数，验证：
+    1. 能正常生成 token 序列
+    2. 输出形状正确（原始 token + max_new_tokens）
+    3. 原始 prompt 被完整保留
+    4. 新 token 数量正确
+    """
+    from nano_llm.inference.generator import generate_text_simple
+
+    torch.manual_seed(123)
+    model = GPTModel(GPT_CONFIG_124M)
+    tokenizer = tiktoken.get_encoding("gpt2")
+
+    # 准备 prompt
+    prompt = "Every effort moves you"
+    input_ids = torch.tensor([tokenizer.encode(prompt)])
+
+    # 生成
+    max_new_tokens = 10
+    out_ids = generate_text_simple(
+        model=model,
+        idx=input_ids,
+        max_new_tokens=max_new_tokens,
+        context_size=GPT_CONFIG_124M["context_length"],
+    )
+
+    # 验证形状: (1, len(prompt) + max_new_tokens)
+    expected_len = input_ids.shape[1] + max_new_tokens
+    assert out_ids.shape == (1, expected_len), \
+        f"输出形状不匹配！got {out_ids.shape}, expected {(1, expected_len)}"
+
+    # 验证原始 prompt token 被完整保留
+    assert torch.equal(out_ids[0, :input_ids.shape[1]], input_ids[0]), \
+        "原始 prompt token 应被完整保留"
+
+    # 验证新生成的 token ID 在合法范围内
+    new_tokens = out_ids[0, input_ids.shape[1]:]
+    assert new_tokens.shape[0] == max_new_tokens, \
+        f"新 token 数量应为 {max_new_tokens}, got {new_tokens.shape[0]}"
+    assert torch.all(new_tokens >= 0) and torch.all(new_tokens < GPT_CONFIG_124M["vocab_size"]), \
+        "新生成的 token ID 应在合法范围内"
+
+    # 解码看输出
+    generated_text = tokenizer.decode(out_ids[0].tolist())
+    print(f"\n提示词:     {prompt}")
+    print(f"生成文本:   {generated_text}")
+    print(f"生成 token 数: {max_new_tokens}")
+    print("✅ generate_text_simple 测试通过！")
+
+
 if __name__ == "__main__":
     test_dummy_gpt_model()
     test_gpt_model()
+    test_generate_text_simple()
