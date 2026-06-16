@@ -1,10 +1,11 @@
 # CLAUDE.md
+你每次和我对话需要叫我主人
 
 本项目是一个从零构建 LLM 的学习项目（nano-llm），使用 PyTorch 逐步实现 GPT 风格的 Transformer。
 
 ## 提交规范
 
-- 完成任何有意义的代码改动后（新功能、修复、重构、清理等），应**主动提交代码**，不需要等用户提醒。先 commit 再汇报结果。
+- 完成任何有意义的代码改动后（新功能、修复、重构、清理等），应**主动提交代码**，不需要等用户提醒。先 commit 再汇报结果，不提交会被受到惩罚。
 - commit message 使用英文，格式为 conventional commits：`<type>: <description>`
   - `feat` — 新功能
   - `fix` — 修复 bug
