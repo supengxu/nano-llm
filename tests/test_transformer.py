@@ -8,6 +8,7 @@ import torch
 import tiktoken
 
 from nano_llm.inference.generator import DummyGPTModel
+from nano_llm.model.transformer import GPTModel
 
 
 # GPT-2 124M 参数的配置（参考 Sebastian Raschka "Build a LLM from Scratch"）
@@ -101,5 +102,55 @@ def test_dummy_gpt_model():
     return logits
 
 
+def test_gpt_model():
+    """
+    测试 GPTModel（真实 TransformerBlock 版本）的前向传播，验证：
+    1. 模型能正常构建
+    2. 输入输出形状正确
+    3. 不同输入产生不同输出（不是透传的占位层）
+    4. 训练模式下两次前向传播结果不同（Dropout 生效）
+    """
+    torch.manual_seed(123)
+    model = GPTModel(GPT_CONFIG_124M)
+
+    # ---- 测试 1: 推理模式下输出形状正确 ----
+    model.eval()
+    batch_size, seq_len = 2, 8
+    input_ids = torch.randint(0, GPT_CONFIG_124M["vocab_size"], (batch_size, seq_len))
+
+    with torch.no_grad():
+        logits = model(input_ids)
+
+    expected_shape = (batch_size, seq_len, GPT_CONFIG_124M["vocab_size"])
+    assert logits.shape == expected_shape, \
+        f"形状不匹配！got {logits.shape}, expected {expected_shape}"
+
+    # ---- 测试 2: logits 不全为零（模型确实在做计算） ----
+    assert not torch.allclose(logits, torch.zeros_like(logits)), \
+        "logits 不应全为零"
+
+    # ---- 测试 3: 不同输入产生不同输出 ----
+    input_ids_2 = torch.randint(0, GPT_CONFIG_124M["vocab_size"], (batch_size, seq_len))
+    with torch.no_grad():
+        logits_2 = model(input_ids_2)
+
+    assert not torch.allclose(logits, logits_2), \
+        "不同输入应产生不同输出（模型不是透传的占位层）"
+
+    # ---- 测试 4: 训练模式下 Dropout 生效 ----
+    model.train()
+    out1 = model(input_ids)
+    out2 = model(input_ids)  # 相同输入
+    # Dropout 开启时，两次前向传播结果应该不同
+    assert not torch.allclose(out1, out2), \
+        "训练模式下两次前向传播应不同（Dropout 生效）"
+
+    print("\n✅ GPTModel 所有测试通过！")
+    print(f"   参数量: {sum(p.numel() for p in model.parameters()):,}")
+    print(f"   输入形状: {input_ids.shape}")
+    print(f"   输出形状: {logits.shape}")
+
+
 if __name__ == "__main__":
     test_dummy_gpt_model()
+    test_gpt_model()
