@@ -40,7 +40,6 @@ class DummyGPTModel(nn.Module):
         # 训练时以 drop_rate 的概率随机将嵌入向量中的某些元素置零，防止过拟合。
         # 推理时（eval 模式）自动关闭，不做丢弃。
         self.drop_emb = nn.Dropout(cfg["drop_rate"])
-
         # ---- Transformer 块序列（占位）----
         # 用 nn.Sequential 把 n_layers 个 DummyTransformerBlock 串起来，
         # 数据依次流过每个块。
@@ -50,10 +49,9 @@ class DummyGPTModel(nn.Module):
         self.trf_blocks = nn.Sequential(
             *[DummyTransformerBlock(cfg) for _ in range(cfg["n_layers"])])
 
-        # ---- 最后的 Layer Normalization（占位）----
+        # ---- 最后的 Layer Normalization ----
         # 在所有 Transformer 块之后、输出头之前做一次层归一化，稳定训练。
-        # 目前 DummyLayerNorm 也是透传的，不执行任何计算。
-        self.final_norm = DummyLayerNorm(cfg["emb_dim"])
+        self.final_norm = LayerNorm(cfg["emb_dim"])
 
         # ---- 输出头（LM Head）----
         # 一个线性层，把 emb_dim 维的隐藏状态投影回 vocab_size 维。
@@ -137,36 +135,63 @@ class DummyTransformerBlock(nn.Module):
         return x
 
 
-class DummyLayerNorm(nn.Module):
+class LayerNorm(nn.Module):
     """
-    占位 Layer Normalization — 暂时什么都不做，输入原样返回。
+    Layer Normalization（层归一化）。
 
-    真实的 LayerNorm 会：
-        1. 计算输入最后一个维度的均值和方差
-        2. 做归一化：y = (x - mean) / sqrt(var + eps)
-        3. 应用可学习的缩放参数（gamma / weight）和偏移参数（beta / bias）
+    在最后一个维度上对输入做归一化，稳定训练、加速收敛。
 
-    这里接受 normalized_shape 和 eps 参数只是为了保持接口一致，
-    方便后续无缝替换为 nn.LayerNorm 或自定义实现。
+    公式：
+        1. 计算最后维度的均值 mean 和方差 var
+        2. 归一化：norm_x = (x - mean) / sqrt(var + eps)
+        3. 缩放和平移：y = scale * norm_x + shift
+           scale (γ) 和 shift (β) 是可学习参数，让网络能恢复原始分布
+
+    与 BatchNorm 的区别：
+        - BatchNorm 跨 batch 做归一化，依赖 batch size
+        - LayerNorm 跨特征维度做归一化，与 batch size 无关
+        - Transformer / NLP 中 LayerNorm 是标配
+
+    参数：
+        emb_dim : int  归一化的维度大小（嵌入向量的维度）
     """
 
-    def __init__(self, normalized_shape, eps=1e-5):
-        """
-        参数：
-            normalized_shape : int   归一化的维度大小（通常是 emb_dim）
-            eps              : float 防止除零的小常数，默认 1e-5
-        """
+    def __init__(self, emb_dim):
         super().__init__()
-        # 占位：不定义 gamma / beta 等可学习参数，仅保持接口兼容
+        self.eps = 1e-5  # 防止除零的小常数
+
+        # 可学习参数：缩放（gamma）和偏移（beta）
+        # 初始：γ=1（不缩放），β=0（不偏移），让归一化后保留原始分布
+        self.scale = nn.Parameter(torch.ones(emb_dim))
+        self.shift = nn.Parameter(torch.zeros(emb_dim))
 
     def forward(self, x):
         """
-        前向传播（占位）— 直接将输入返回，不做任何归一化计算。
+        前向传播。
 
         参数：
-            x : Tensor  形状 (..., normalized_shape)
+            x : Tensor  形状 (..., emb_dim)
 
         返回：
-            x : Tensor  与输入完全相同
+            y : Tensor  形状与输入相同，在最后一个维度上做了归一化
         """
+        # Step 1: 沿最后一个维度（emb_dim）计算均值和方差
+        # keepdim=True 保留维度，以便广播：(..., emb_dim) → (..., 1)
+        # unbiased=False 使用有偏方差估计（除以 N 而非 N-1），
+        #  这更适用于 LayerNorm 对已归一化输出的假设，也是 nn.LayerNorm 的默认行为
+        mean = x.mean(dim=-1, keepdim=True)
+        var = x.var(dim=-1, keepdim=True, unbiased=False)
+
+        # Step 2: 归一化 — 减去均值，除以标准差
+        norm_x = (x - mean) / torch.sqrt(var + self.eps)
+
+        # Step 3: 缩放和平移 — 可学习的仿射变换
+        return self.scale * norm_x + self.shift
+
+
+class DummyLayerNorm(nn.Module):
+    def __init__(self, normalized_shape, eps=1e-5):
+        super().__init__()
+
+    def forward(self, x):
         return x

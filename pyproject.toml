@@ -6,6 +6,7 @@ requires-python = ">=3.10"
 dependencies = [
     "datasets",
     "pyyaml",
+    "tiktoken>=0.13.0",
     "torch",
     "tqdm",
 ]
