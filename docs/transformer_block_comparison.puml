@@ -1,0 +1,123 @@
+@startuml TransformerBlock 对比图
+' ============================================================
+' TransformerBlock 架构对比：nano-llm (GPT-2 经典) vs 现代主流 (Llama 风格)
+' ============================================================
+
+skinparam backgroundColor #FEFEFE
+skinparam defaultFontName "Fira Code, Menlo, monospace"
+skinparam defaultFontSize 12
+skinparam ArrowThickness 2
+skinparam BoxPadding 8
+skinparam Shadowing false
+
+title <size:20><b>TransformerBlock 架构对比</b></size>\n<size:14>左侧: nano-llm (GPT-2 经典 Pre-LN) ｜ 右侧: 现代主流 (Llama 风格 Pre-LN + 改进)</size>
+
+' ============================================================
+' 左侧: nano-llm 的 TransformerBlock
+' ============================================================
+package "**nano-llm TransformerBlock**\n(GPT-2 风格 · Pre-LayerNorm)" as NL #F0F4FF {
+
+    rectangle "**Input**\n(batch, seq_len, d_model)" as NL_IN #E8ECF4
+
+    ' --- 第一个子层: Self-Attention ---
+    rectangle "**Pre-Norm 1**\nLayerNorm\n(可学习 γ/β · eps=1e-5)" as NL_NORM1 #C8D6E5
+    rectangle "**Multi-Head Self-Attention**\n· 独立 Q/K/V 线性投影 (d_model → d_model)\n· 分头: (batch, heads, seq, head_dim)\n· Scaled Dot-Product + Causal Mask\n· Softmax + Dropout\n· Output 投影" as NL_ATTN #A3B8D8
+    rectangle "**Dropout**" as NL_DROP1 #DFE6E9
+
+    ' --- 第二个子层: FeedForward ---
+    rectangle "**Pre-Norm 2**\nLayerNorm\n(可学习 γ/β · eps=1e-5)" as NL_NORM2 #C8D6E5
+    rectangle "**FeedForward Network**\n· Linear(d_model → 4×d_model)\n· GELU 激活\n· Linear(4×d_model → d_model)" as NL_FF #FFCCBC
+    rectangle "**Dropout**" as NL_DROP2 #DFE6E9
+
+    rectangle "**Output**\n(batch, seq_len, d_model)" as NL_OUT #E8ECF4
+
+    ' 残差连接
+    NL_IN -down-> NL_NORM1
+    NL_NORM1 -down-> NL_ATTN
+    NL_ATTN -down-> NL_DROP1
+    NL_DROP1 -down-> NL_NORM2 #line.dashed
+    NL_NORM2 -down-> NL_FF
+    NL_FF -down-> NL_DROP2
+    NL_DROP2 -down-> NL_OUT
+
+    ' 残差 1
+    NL_IN -[#E17055]-> NL_DROP1 : <color:#E17055>**残差连接 (+ x)**</color>
+    ' 残差 2 (从第一个残差和位置开始)
+    note right of NL_DROP1 : <color:#E17055>element-wise add</color>
+}
+
+' ============================================================
+' 右侧: 现代主流的 TransformerBlock
+' ============================================================
+package "**Modern Mainstream TransformerBlock**\n(Llama 3 / Mistral 风格)" as MM #F0FFF0 {
+
+    rectangle "**Input**\n(batch, seq_len, d_model)" as MM_IN #E8F4E8
+
+    ' --- 第一个子层: Self-Attention (modern) ---
+    rectangle "**RMS Norm 1**\nRMSNorm\n(无中心化 · 仅缩放 γ)" as MM_NORM1 #B2DFDB
+    rectangle "**Multi-Head Self-Attention**\n<b>(改进版)</b>\n· 融合 QKV 投影 (单次 Linear: d_model → 3×d_model)\n· **RoPE** 旋转位置编码 (嵌入 Q/K 中)\n· **Grouped-Query Attention (GQA)**\n  或 Multi-Query Attention (MQA)\n· Scaled Dot-Product + Causal Mask\n· Softmax (无 Dropout!)" as MM_ATTN #80CBC4
+    rectangle "**No Dropout**\n(现代架构通常移除)" as MM_DROP1 #DFE9DF
+
+    ' --- 第二个子层: FeedForward (modern) ---
+    rectangle "**RMS Norm 2**\nRMSNorm\n(无中心化 · 仅缩放 γ)" as MM_NORM2 #B2DFDB
+    rectangle "**SwiGLU FeedForward**\n<b>(门控 FFN)</b>\n· Linear(d_model → 8/3×d_model) × 3 路\n· Gate: Linear + **SwiGLU** 激活\n· Up:   Linear (无激活)\n· Down: Linear(8/3×d_model → d_model)\n\nSwiGLU(x) = (xW_gate ⊙ SiLU(xW_up)) W_down" as MM_FF #A5D6A7
+    rectangle "**No Dropout**\n(现代架构通常移除)" as MM_DROP2 #DFE9DF
+
+    rectangle "**Output**\n(batch, seq_len, d_model)" as MM_OUT #E8F4E8
+
+    ' 数据流
+    MM_IN -down-> MM_NORM1
+    MM_NORM1 -down-> MM_ATTN
+    MM_ATTN -down-> MM_DROP1
+    MM_DROP1 -down-> MM_NORM2 #line.dashed
+    MM_NORM2 -down-> MM_FF
+    MM_FF -down-> MM_DROP2
+    MM_DROP2 -down-> MM_OUT
+
+    ' 残差
+    MM_IN -[#2E7D32]-> MM_DROP1 : <color:#2E7D32>**残差连接 (+ x)**</color>
+}
+
+' ============================================================
+' 关键差异总结
+' ============================================================
+package "**🔑 关键差异总结**" as DIFF #FFF8E1 {
+
+    card "<b>组件</b>" as HEADER1 #FFE082
+
+    card "<b>Normalization</b>" as R1C1 #FFF9C4
+    card "**LayerNorm**\nmean + variance 归一化\n两个可学习参数 (γ, β)" as R1C2 #D7CCC8
+    card "**RMSNorm**\n仅 root-mean-square 归一化\n一个可学习参数 (γ)\n<b>更快 · Llama/Mistral 标配</b>" as R1C3 #B2DFDB
+
+    card "<b>位置编码</b>" as R2C1 #FFF9C4
+    card "**可学习 Position Embedding**\n参数矩阵 (context_len, d_model)\n<b>固定长度 · 无外推</b>" as R2C2 #D7CCC8
+    card "**RoPE (旋转位置编码)**\n直接编码到 Q/K 中\n<b>相对位置 · 可外推长度</b>" as R2C3 #B2DFDB
+
+    card "<b>Attention 机制</b>" as R3C1 #FFF9C4
+    card "**Multi-Head Attention (MHA)**\n独立 Q/K/V/O 投影\nnum_heads 个头各自计算" as R3C2 #D7CCC8
+    card "**GQA / MQA**\nK/V 头数 < Q 头数\n<b>节省 KV Cache · 提速推理</b>" as R3C3 #B2DFDB
+
+    card "<b>QKV 投影</b>" as R4C1 #FFF9C4
+    card "**分离投影**\nW_query, W_key, W_value\n三次独立 Linear" as R4C2 #D7CCC8
+    card "**融合投影**\n一次 Linear(d → 3d)\n<b>减少 kernel launch 开销</b>" as R4C3 #B2DFDB
+
+    card "<b>FeedForward</b>" as R5C1 #FFF9C4
+    card "**标准 FFN**\nLinear → GELU → Linear\n4× 扩展比" as R5C2 #FFCCBC
+    card "**SwiGLU (门控 FFN)**\nGate × SiLU(Up) → Down\n8/3× 扩展比 (含门控拆分)\n<b>更强表达 · PaLM/Llama 标配</b>" as R5C3 #A5D6A7
+
+    card "<b>Dropout</b>" as R6C1 #FFF9C4
+    card "**使用 Dropout**\nAttention weights + 残差路径\n正则化 · 防止过拟合" as R6C2 #D7CCC8
+    card "**逐步移除 Dropout**\n大数据量下不需要\n<b>训练/推理一致 · 更简单</b>" as R6C3 #B2DFDB
+
+}
+
+' ============================================================
+' 连接线（隐藏，仅用于布局）
+' ============================================================
+R1C1 -[hidden]right-> R2C1
+R2C1 -[hidden]right-> R3C1
+R3C1 -[hidden]right-> R4C1
+R4C1 -[hidden]right-> R5C1
+R5C1 -[hidden]right-> R6C1
+
+@enduml
