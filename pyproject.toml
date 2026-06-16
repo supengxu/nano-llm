@@ -4,11 +4,8 @@ version = "0.1.0"
 description = "A tiny LLM implementation from scratch"
 requires-python = ">=3.10"
 dependencies = [
-    "datasets",
-    "pyyaml",
     "tiktoken>=0.13.0",
     "torch",
-    "tqdm",
 ]
 
 [build-system]

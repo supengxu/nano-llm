@@ -20,7 +20,7 @@ class GPTModel(nn.Module):
         Token IDs → Token Embedding → + Position Embedding → Dropout
         → N × TransformerBlock → LayerNorm → Linear Head → Logits
 
-    这是 DummyGPTModel 的"毕业"版本——所有组件都已替换为真实实现。
+    所有组件（TransformerBlock、LayerNorm 等）均已替换为真实实现。
 
     参数：
         cfg : dict  包含模型超参数的字典，需要：
