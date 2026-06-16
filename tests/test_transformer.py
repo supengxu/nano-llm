@@ -7,8 +7,9 @@
 import torch
 import tiktoken
 
-from nano_llm.inference.generator import DummyGPTModel
+from nano_llm.inference.generator import DummyGPTModel, generate_text_simple
 from nano_llm.model.transformer import GPTModel
+from nano_llm.utils.helpers import text_to_token_ids, token_ids_to_text
 
 
 # GPT-2 124M 参数的配置（参考 Sebastian Raschka "Build a LLM from Scratch"）
@@ -202,7 +203,63 @@ def test_generate_text_simple():
     print("✅ generate_text_simple 测试通过！")
 
 
+def test_full_generation_pipeline():
+    """
+    测试完整的文本生成流水线，串联 text_to_token_ids / generate_text_simple / token_ids_to_text：
+    1. text_to_token_ids 将文本编码为模型输入格式
+    2. generate_text_simple 自回归生成新 token
+    3. token_ids_to_text 将 token 序列解码回文本
+
+    这是"从文本到文本"的端到端测试。
+    """
+    torch.manual_seed(123)
+    model = GPTModel(GPT_CONFIG_124M)
+    tokenizer = tiktoken.get_encoding("gpt2")
+
+    # ---- Step 1: 文本 → Token IDs ----
+    prompt = "Every effort moves you"
+    input_ids = text_to_token_ids(prompt, tokenizer)
+    assert input_ids.shape[0] == 1, "batch 维度应为 1"
+    print(f"\n输入文本:     {repr(prompt)}")
+    print(f"Token IDs:    {input_ids[0].tolist()}")
+
+    # ---- Step 2: 自回归生成 ----
+    max_new_tokens = 15
+    out_ids = generate_text_simple(
+        model=model,
+        idx=input_ids,
+        max_new_tokens=max_new_tokens,
+        context_size=GPT_CONFIG_124M["context_length"],
+    )
+
+    # 验证 prompt 部分没有被修改
+    assert torch.equal(out_ids[0, :input_ids.shape[1]], input_ids[0]), \
+        "prompt token 不应被修改"
+
+    # ---- Step 3: Token IDs → 文本 ----
+    generated_text = token_ids_to_text(out_ids, tokenizer)
+    print(f"生成的 token: {out_ids[0].tolist()}")
+    print(f"生成文本:     {repr(generated_text)}")
+
+    # ---- 验证 ----
+    # 解码后的文本应以原始 prompt 开头
+    assert generated_text.startswith(prompt), \
+        f"生成文本应以 prompt 开头: {repr(generated_text[:len(prompt)])} != {repr(prompt)}"
+    # 生成的文本应比 prompt 长（有新 token）
+    assert len(out_ids[0]) > len(input_ids[0]), \
+        f"应有新 token 生成: {len(out_ids[0])} <= {len(input_ids[0])}"
+    # 新生成的 token 数量 == max_new_tokens
+    assert len(out_ids[0]) == len(input_ids[0]) + max_new_tokens, \
+        f"新 token 数应为 {max_new_tokens}"
+
+    print(f"\n提示词 token 数: {len(input_ids[0])}")
+    print(f"生成后 token 数: {len(out_ids[0])}")
+    print(f"新增 token 数:   {len(out_ids[0]) - len(input_ids[0])}")
+    print("✅ 完整生成流水线测试通过！")
+
+
 if __name__ == "__main__":
     test_dummy_gpt_model()
     test_gpt_model()
     test_generate_text_simple()
+    test_full_generation_pipeline()
