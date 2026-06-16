@@ -2,7 +2,7 @@ import torch.nn as nn
 
 from nano_llm.model.attention import MultiHeadAttention
 from nano_llm.model.feed_forward import FeedForward
-from nano_llm.inference.generator import LayerNorm
+from nano_llm.model.layer_norm import LayerNorm
 
 
 class TransformerBlock(nn.Module):

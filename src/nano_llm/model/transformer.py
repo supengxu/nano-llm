@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 
 from nano_llm.model.transformer_block import TransformerBlock
-from nano_llm.inference.generator import LayerNorm
+from nano_llm.model.layer_norm import LayerNorm
 
 
 class GPTModel(nn.Module):
